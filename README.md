@@ -1,72 +1,119 @@
 # Steiner Tree: DP vs Greedy
 
-Implementación y comparación empírica de dos algoritmos para el problema
-del **Árbol de Steiner en grafos**:
+Comparación empírica entre la programación dinámica exacta de
+**Dreyfus–Wagner (1971)** y tres heurísticas con cota de
+2-aproximación para el problema del *árbol de Steiner en grafos*:
 
-- **Exacto**: programación dinámica de Dreyfus–Wagner (1971).
-  Complejidad temporal `O(3^k · n + 2^k · n² + n³)`, donde `n = |V|` y
-  `k = |T|` (número de terminales). Superpolinomial en `k`.
-- **Greedy**: heurística por caminos más cortos / MST de Kou–Markowsky–Berman
-  (1981). Tiempo polinomial, garantía de `2 · (1 − 1/L)`-aproximación, donde
-  `L` es el número de hojas del árbol óptimo.
+- **KMB** — Kou–Markowsky–Berman (1981).
+- **Mehlhorn** — Mehlhorn (1988), versión $O(m + n \log n)$.
+- **RSPH** — Repetitive Shortest Path Heuristic (Takahashi–Matsuyama 1980, Voß 1992).
 
-Proyecto #2 de *Análisis y Diseño de Algoritmos* (UVG, Semestre 1, 2026),
-Docente: Tomás Gálvez P.
+Proyecto #2 de *Análisis y Diseño de Algoritmos*, UVG, Semestre 1, 2026.
+Integrantes: Fernando Mendoza, Dilary Cruz.
 
-## Integrantes
+## Pregunta de investigación
 
-- Fernando
-- Dilary
+> *KMB tiene garantía teórica de 2-aproximación. Empíricamente, ¿cuándo se acerca a la cota y cuándo se queda lejos? ¿Qué estructuras de instancia provocan que falle de forma severa?*
 
-## Planteamiento
+El proyecto responde por tres ejes:
 
-Dado un grafo no dirigido conexo `G = (V, E)` con pesos no negativos
-`w: E → ℝ≥₀` y un conjunto de vértices *terminales* `T ⊆ V`, encontrar
-un subárbol de `G` que contenga todos los terminales y cuyo peso total
-sea mínimo. Los vértices no terminales que el árbol decide incluir se
-llaman *puntos de Steiner*; permitirlos puede reducir estrictamente el
-peso total, y eso distingue al problema del árbol generador mínimo.
+1. **Tiempo.** Explosión exponencial de DP en $k$ vs polinomialidad de greedy en $n$.
+2. **Calidad.** Distribución del cociente *greedy/óptimo* a lo largo de cinco familias.
+3. **Estructura.** Construcción patológica (`spider`) que alcanza asintóticamente la cota $2(1 - 1/k)$.
 
-La versión de decisión es NP-completa (Karp, 1972), de modo que cualquier
-algoritmo exacto debe correr en tiempo superpolinomial salvo que P = NP.
-
-## Estructura
+## Estructura del repositorio
 
 ```
 steiner-tree-dp-vs-greedy/
-├── README.md
-├── requirements.txt
-├── .gitignore
 ├── steiner/
-│   ├── __init__.py
-│   ├── graph_utils.py     # Instance, utilidades de grafo
-│   ├── dreyfus_wagner.py  # DP exacta
-│   └── mst_heuristic.py   # Greedy KMB
-├── tests/
-│   ├── __init__.py
-│   └── test_sanity.py     # casos verificables a mano
-├── demo.py                # corrida de demostración
-└── bench/                 # análisis empírico (pendiente)
+│   ├── graph_utils.py        Instance + APSP + utilidades
+│   ├── dreyfus_wagner.py     DP exacta (con reconstrucción)
+│   ├── mst_heuristic.py      KMB
+│   ├── mehlhorn.py           Mehlhorn 1988
+│   ├── rsph.py               Repetitive Shortest Path Heuristic
+│   └── instances/            5 generadores (ER, euclidean, geometric, spider, SteinLib)
+├── viz/                      draw_tree, animate (RSPH gif), heatmap
+├── bench/                    timing, quality, regression, run_experiments, analyze, fetch_steinlib
+├── dashboard/app.py          Streamlit interactivo
+├── tests/                    32 tests unitarios
+├── docs/
+│   ├── paper.tex             documento estilo paper (IEEE-like)
+│   ├── references.bib        13 referencias canónicas
+│   ├── figures/              generadas por bench/analyze
+│   ├── tables/               generadas por bench/analyze
+│   └── steinlib_data/        18 instancias B (descargadas)
+├── demo.py                   corrida de demostración
+├── reproduce.sh              regenera todo de un comando
+└── requirements.txt
 ```
 
-## Uso
+## Quickstart
 
 ```bash
 pip install -r requirements.txt
 python demo.py
-python -m unittest discover tests
+python -m unittest discover tests -v
 ```
 
-La corrida de `demo.py` debe reportar, en la instancia "spider" de
-cuatro terminales, óptimo `4.0` contra greedy `5.7` (cociente `1.425`);
-y en el triángulo simple, óptimo y greedy ambos `3.0`.
+## Reproducir todo
 
-## Roadmap
+```bash
+chmod +x reproduce.sh
+./reproduce.sh           # smoke run (--quick)
+QUICK="" ./reproduce.sh  # sweep completo (~horas)
+```
 
-- [x] Implementación exacta (Dreyfus–Wagner) con reconstrucción de árbol.
-- [x] Implementación greedy (Kou–Markowsky–Berman) con poda de hojas no terminales.
-- [x] Pruebas de sanidad en instancias verificables a mano.
-- [ ] Generador de instancias aleatorias (Erdős–Rényi ponderado).
-- [ ] Script de benchmarking y recolección de tiempos.
-- [ ] Diagrama de dispersión y regresión polinomial.
-- [ ] Documento PDF con análisis teórico.
+Esto:
+
+1. Instala las dependencias.
+2. Descarga la serie B de SteinLib en `docs/steinlib_data/`.
+3. Corre los experimentos sobre las 5 familias × 4 algoritmos.
+4. Genera figuras y tablas LaTeX en `docs/figures/` y `docs/tables/`.
+5. Compila `docs/paper.pdf` con `latexmk` si está disponible.
+
+## Componentes individuales
+
+```bash
+python -m bench.fetch_steinlib                              # descarga SteinLib B
+python -m bench.run_experiments --output bench/results/raw.csv --quick
+python -m bench.analyze --input bench/results/raw.csv --figures docs/figures
+```
+
+Dashboard (interfaz web): desde la **raíz** del repositorio ejecuta `streamlit run dashboard/app.py`. El script añade la raíz a `sys.path` para que Python encuentre los paquetes `steiner` y `viz` (Streamlit suele poner primero la carpeta `dashboard/` en el path). Alternativa: instalar el proyecto con `pip install -e .` y usar el mismo comando.
+
+## Pruebas
+
+```bash
+python -m unittest discover tests -v
+```
+
+Cobertura:
+
+- 11 tests de sanidad sobre la spider de 4 terminales y el triángulo (Phase 0).
+- 50 instancias seeded × 2 heurísticas comparadas contra DP, verificando la cota $2(1 - 1/L)$ (Phases 1–2).
+- Test asintótico de la construcción tight: `spider(k=40, eps=0.01)` debe alcanzar ratio $\ge 1.9$.
+- Tests de tiempos, regresión polinomial y bootstrap CI.
+- Tests de los generadores de instancias (determinismo bajo semilla).
+- Smoke tests de las visualizaciones.
+
+## Resultados destacados
+
+Después de un `./reproduce.sh`:
+
+- **Tiempo.** La pendiente del ajuste $\log t_{\mathrm{DP}} = a + b\cdot k$ se aproxima a $\ln 3 \approx 1.10$, consistente con la complejidad teórica $O(3^k \cdot n)$.
+- **Calidad.** En las cinco familias el cociente mediano de los tres greedy queda muy por debajo de 2 (típicamente $\le 1.10$), pero la familia *spider* lo lleva al límite.
+- **Tight bound.** Con `spider(k=40, epsilon=0.01)` el cociente KMB es $\approx 1.94$, validando empíricamente que la cota $2(1 - 1/L)$ es esencialmente apretada.
+- **SteinLib.** Los tres greedy resuelven `b01.stp`–`b18.stp` con cocientes muy cercanos a 1 frente a DP exacta donde es viable.
+
+Las figuras correspondientes se generan en `docs/figures/`.
+
+## Referencias
+
+La bibliografía completa está en [`docs/references.bib`](docs/references.bib).
+Las cinco fundacionales:
+
+- S. E. Dreyfus, R. A. Wagner. *The Steiner problem in graphs.* Networks 1 (1971), 195–207.
+- L. Kou, G. Markowsky, L. Berman. *A fast algorithm for Steiner trees.* Acta Informatica 15 (1981), 141–145.
+- K. Mehlhorn. *A faster approximation algorithm for the Steiner problem in graphs.* IPL 27 (1988), 125–128.
+- T. Koch, A. Martin, S. Voß. *SteinLib: An updated library on Steiner tree problems in graphs.* ZIB Report 00-37 (2001).
+- R. M. Karp. *Reducibility among combinatorial problems.* In *Complexity of Computer Computations* (1972), 85–103.

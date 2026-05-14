@@ -1,0 +1,234 @@
+% =============================================================================
+%  Steiner Tree: DP exacta (Dreyfus-Wagner) vs heuristicas greedy (KMB, Mehlhorn, RSPH).
+%  UVG, Analisis y Diseno de Algoritmos, Proyecto #2, Semestre 1, 2026.
+% =============================================================================
+\documentclass[10pt,journal]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage[backend=biber,style=numeric,sorting=nyt]{biblatex}
+\addbibresource{references.bib}
+
+\geometry{margin=1in}
+
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+\title{El problema del \'arbol de Steiner en grafos:\\
+DP exacta vs heur\'isticas greedy con cota $2(1 - 1/L)$}
+
+\author{Fernando Mendoza \\ Dilary Cruz \\
+{\small Universidad del Valle de Guatemala}}
+
+\date{Mayo 2026}
+
+\begin{document}
+\maketitle
+
+% -----------------------------------------------------------------------------
+\begin{abstract}
+\todo{Dilary: redactar abstract (~150 palabras): pregunta de investigaci\'on
+(\textquote{cuando se acerca KMB a la cota 2}), familias de instancias,
+hallazgos principales (la spider alcanza ratio empirico $\ge 1.9$ a $k=40$,
+$\epsilon=0.01$, etc.) y conclusi\'on de una linea sobre el tradeoff
+tiempo/calidad.}
+\end{abstract}
+
+% -----------------------------------------------------------------------------
+\section{Introducci\'on}\label{sec:intro}
+\todo{Dilary: 1-2 paginas. Motivacion (multicast IP, ruteo VLSI, filogenetica),
+pregunta de investigacion (replica del marco experimental de Voss 1992 \cite{Voss1992}
+y Ribeiro et al.\ 2002 \cite{RibeiroUchoaWerneck2002}), y lista numerada de las
+contribuciones del trabajo:
+\begin{enumerate}
+  \item Implementacion exacta de Dreyfus-Wagner \cite{DreyfusWagner1971} con reconstruccion.
+  \item Tres heuristicas 2-aproximacion comparadas: KMB \cite{KouMarkowskyBerman1981},
+        Mehlhorn \cite{Mehlhorn1988} y RSPH \cite{TakahashiMatsuyama1980, Voss1992}.
+  \item Cinco familias de instancias incluyendo la construccion patologica tight para la cota 2.
+  \item Validacion contra SteinLib \cite{KochMartinVoss2001}.
+  \item Regresiones con bootstrap CI sobre los tiempos.
+\end{enumerate}}
+
+% -----------------------------------------------------------------------------
+\section{Trabajo previo}\label{sec:related}
+\todo{Dilary: review breve. Mencionar:
+\begin{itemize}
+  \item Karp 1972 \cite{Karp1972} (NP-completitud de Steiner en grafos).
+  \item Dreyfus-Wagner 1971 \cite{DreyfusWagner1971} (DP en $O(3^k n + 2^k n^2 + n^3)$).
+  \item KMB 1981 \cite{KouMarkowskyBerman1981} (primer 2-aproximacion polinomial).
+  \item Mehlhorn 1988 \cite{Mehlhorn1988} (misma cota, mejor complejidad).
+  \item Mejoras: Zelikovsky 11/6 \cite{Zelikovsky1993}, Robins-Zelikovsky 1.55 \cite{RobinsZelikovsky2005},
+        Byrka et al.\ 1.39 \cite{ByrkaGRS2010}.
+  \item Benchmark canonico: SteinLib \cite{KochMartinVoss2001}.
+  \item Marco LP: Goemans-Williamson \cite{GoemansWilliamson1995} (solo mencion).
+  \item Compendio: Hwang-Richards-Winter \cite{HwangRichardsWinter1992}.
+\end{itemize}}
+
+% -----------------------------------------------------------------------------
+\section{An\'alisis te\'orico}\label{sec:theory}
+
+\subsection{Subestructura \'optima}\label{sec:substruct}
+\todo{Dilary: demostraci\'on por argumento de intercambio. Enunciado:
+si $T^*$ es \'arbol \'optimo para $(G, T)$ y $v \in V(T^*)$ tiene grado $\ge 2$,
+particionando los terminales entre los sub\'arboles que cuelgan de $v$ se
+obtienen sub\'arboles \'optimos para las particiones de $T$.}
+
+\subsection{Relaci\'on de recurrencia}\label{sec:recurrence}
+\todo{Dilary: derivar las dos ecuaciones de Dreyfus-Wagner.}
+Sean $D \subseteq T$, $v \in V$:
+\begin{align}
+f(\{t\}, v) &= d_G(t, v) \\
+g(D, v) &= \min_{\emptyset \subsetneq D' \subsetneq D} f(D', v) + f(D \setminus D', v) \\
+f(D, v) &= \min_{u \in V} g(D, u) + d_G(u, v)
+\end{align}
+Justificar cada paso a partir de \S\ref{sec:substruct}.
+
+\subsection{Ausencia de la \emph{greedy choice property}}\label{sec:no-greedy}
+\todo{Dilary: contraejemplo formal con 4 vertices (la spider basica de
+$\S$\ref{sec:experiments}) y argumento de que no existe matroide ponderada que modele
+el problema: dar dos bases que violan la propiedad de intercambio matroide.}
+
+% -----------------------------------------------------------------------------
+\section{Algoritmos}\label{sec:algorithms}
+
+\subsection{Dreyfus-Wagner (DP)}
+\begin{algorithm}[H]
+\caption{Dreyfus-Wagner exacto}
+\begin{algorithmic}[1]
+\Require Grafo $G=(V,E,w)$, terminales $T \subseteq V$
+\State Calcular $d_G(u,v)$ para todo par (APSP por Dijkstra)
+\For{cada $t \in T$ y $v \in V$}
+  \State $f(\{t\}, v) \gets d_G(t,v)$
+\EndFor
+\For{$s$ desde $2$ hasta $|T|$}
+  \For{$D \subseteq T$ con $|D| = s$ y $v \in V$}
+    \State $g(D, v) \gets \min_{\emptyset \subsetneq D' \subsetneq D} f(D', v) + f(D \setminus D', v)$
+    \State $f(D, v) \gets \min_{u \in V} g(D, u) + d_G(u, v)$
+  \EndFor
+\EndFor
+\State \Return $f(T, t_0)$ con cualquier $t_0 \in T$
+\end{algorithmic}
+\end{algorithm}
+\textbf{Complejidad:} $O(3^{|T|}\cdot n + 2^{|T|} \cdot n^2 + n^3)$ tiempo,
+$O(2^{|T|} \cdot n)$ espacio. La reconstrucci\'on del \'arbol se obtiene
+guardando punteros a las particiones y nodos $u$ que minimizan cada
+sub\-problema.
+
+\subsection{KMB (1981)}
+\begin{enumerate}
+  \item Construir la clausura m\'etrica $G_1$ sobre los terminales: grafo
+        completo con $w_{G_1}(s, t) = d_G(s, t)$.
+  \item Calcular MST $T_1$ de $G_1$.
+  \item Reemplazar cada arista $(s,t) \in T_1$ por su camino m\'as corto en $G$.
+  \item MST $T_2$ del subgrafo resultante.
+  \item Podar hojas no terminales.
+\end{enumerate}
+\textbf{Complejidad:} $O(|T|(m + n \log n))$ por las Dijkstras.
+\textbf{Cota:} costo $\le 2(1 - 1/L)\cdot \text{OPT}$ \cite{KouMarkowskyBerman1981}.
+
+\subsection{Mehlhorn (1988)}
+Misma cota que KMB, pero usa una \emph{\'unica} Dijkstra multifuente
+desde todos los terminales y construye un grafo auxiliar tipo Voronoi:
+para cada arista $(u,v) \in E$ con $\pi(u) \ne \pi(v)$ se inserta en
+$G'$ una arista $(\pi(u), \pi(v))$ con peso $d(u) + w(u,v) + d(v)$,
+conservando el m\'inimo por par de terminales. Luego MST, reexpansi\'on
+y poda \cite{Mehlhorn1988}.\\
+\textbf{Complejidad:} $O(m + n \log n)$.
+
+\subsection{Repetitive Shortest Path Heuristic (RSPH)}
+Crece el \'arbol iterativamente conectando, en cada paso, el terminal
+m\'as cercano al \'arbol parcial v\'ia su camino m\'as corto
+\cite{TakahashiMatsuyama1980, Voss1992}.\\
+\textbf{Complejidad:} $O(|T|(m + n \log n))$.
+\textbf{Cota:} igual a KMB.
+
+% -----------------------------------------------------------------------------
+\section{Dise\~no experimental}\label{sec:experiments}
+
+Cinco familias de instancias, generadas con semilla expl\'icita:
+\begin{itemize}
+  \item \textbf{ER-sparse} ($p = 0.3$) y \textbf{ER-dense} ($p = 0.7$).
+  \item \textbf{Euclidean}: $n$ puntos uniformes en $[0,1]^2$, grafo completo.
+  \item \textbf{Geometric}: random geometric graph radio $r$.
+  \item \textbf{Spider} (\S\ref{sec:no-greedy}): tight para la cota 2.
+  \item \textbf{SteinLib-B} \cite{KochMartinVoss2001}.
+\end{itemize}
+Mediciones: 1 warm-up + 3-10 repeticiones, \texttt{time.perf\_counter()},
+reportando mediana y rango intercuartil. Bootstrap de 1000 resamples
+para los intervalos de confianza de los coeficientes de regresi\'on
+(\S\ref{sec:results-time}).
+
+% -----------------------------------------------------------------------------
+\section{Resultados}\label{sec:results}
+
+\subsection{Tiempo de ejecuci\'on}\label{sec:results-time}
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{figures/time_scatter.png}
+  \caption{Tiempo mediano log-log: DP (vs $k$) y greedies (vs $n$).}
+  \label{fig:time}
+\end{figure}
+\begin{table}[h]
+  \centering
+  \input{tables/regression_dp.tex}
+  \caption{Regresi\'on $\log t_{\mathrm{DP}} = a + b\cdot k$ con bootstrap CI 95\%.}
+  \label{tab:reg-dp}
+\end{table}
+\todo{Dilary: discutir pendiente $b$ vs $\ln 3 \approx 1.099$ (esperada por la complejidad teorica).}
+
+\subsection{Calidad: distribuci\'on del cociente}
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{figures/quality_box.png}
+  \caption{Cociente \emph{greedy/\'optimo} por familia y algoritmo.}
+  \label{fig:quality}
+\end{figure}
+\todo{Dilary: 2-3 parrafos comparando KMB / Mehlhorn / RSPH por familia.}
+
+\subsection{Instancias patol\'ogicas}
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{figures/spider_ratio.png}
+  \caption{Cociente emp\'irico para la familia \textsf{spider}: cuando
+  $\epsilon \to 0$ y $k$ crece, el cociente se acerca a la cota te\'orica
+  $2(1 - 1/k)$.}
+  \label{fig:spider}
+\end{figure}
+\todo{Dilary: este es el resultado estrella; cerrar la conexion con el
+contraejemplo formal de \S\ref{sec:no-greedy}.}
+
+\subsection{Benchmark SteinLib}
+\begin{table}[h]
+  \centering
+  \input{tables/steinlib.tex}
+  \caption{Costos por algoritmo sobre la serie B de SteinLib \cite{KochMartinVoss2001}.}
+  \label{tab:steinlib}
+\end{table}
+
+\subsection{Heatmap $(n, k) \to$ cociente}
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.85\linewidth]{figures/heatmap_kmb_euclidean.png}
+  \caption{Heatmap del cociente mediano de KMB sobre la familia Euclidean.}
+  \label{fig:heat}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\section{Discusi\'on}\label{sec:discussion}
+\todo{Dilary: cuando usar greedy en la practica; tradeoff tiempo/calidad;
+que tan apretada es la cota; limitaciones (Python, $n$/$k$ chicos, semillas).}
+
+\section{Conclusiones}\label{sec:conclusions}
+\todo{Dilary: 1 parrafo de recapitulacion + 1 de trabajo futuro.}
+
+\printbibliography
+
+\end{document}
