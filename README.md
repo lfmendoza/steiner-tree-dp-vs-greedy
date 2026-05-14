@@ -11,6 +11,25 @@ Comparación empírica entre la programación dinámica exacta de
 Proyecto #2 de *Análisis y Diseño de Algoritmos*, UVG, Semestre 1, 2026.
 Integrantes: Fernando Mendoza, Dilary Cruz.
 
+### División del trabajo (implementación y pruebas)
+
+Cada bloque funcional se entrega **junto con sus pruebas**: no hay commits
+solo de “código sin tests” ni solo de “tests sin código nuevo”. En el
+historial de Git los bloques se reparten alternando autores; cada mensaje
+de commit detalla ambas partes (implementación + validación).
+
+| Bloque | Responsable principal (autor en Git) | Implementación | Pruebas |
+|--------|----------------------------------------|----------------|---------|
+| Núcleo `steiner` (DP, KMB, `Instance`) | Fernando | `graph_utils`, `dreyfus_wagner`, `mst_heuristic` | `test_sanity` (11 casos) |
+| Mehlhorn y RSPH | Dilary | `mehlhorn`, `rsph` | `test_mehlhorn`, `test_rsph`, `_helpers` |
+| Generadores de instancias | Fernando | `steiner/instances/*` | `test_instances`, `test_pathological_bound` |
+| Visualización | Dilary | `viz/*` | `test_viz` |
+| Benchmarks | Fernando | `bench/*` | `test_bench` |
+| Dashboard, reproducibilidad y paper | Dilary | `dashboard`, `reproduce.sh`, `docs/*`, README | `test_dashboard` |
+
+La revisión cruzada (pair review) entre integrantes se hace fuera de Git;
+el reparto anterior por “solo tests vs solo código” no aplica.
+
 ## Pregunta de investigación
 
 > *KMB tiene garantía teórica de 2-aproximación. Empíricamente, ¿cuándo se acerca a la cota y cuándo se queda lejos? ¿Qué estructuras de instancia provocan que falle de forma severa?*
@@ -35,7 +54,7 @@ steiner-tree-dp-vs-greedy/
 ├── viz/                      draw_tree, animate (RSPH gif), heatmap
 ├── bench/                    timing, quality, regression, run_experiments, analyze, fetch_steinlib
 ├── dashboard/app.py          Streamlit interactivo
-├── tests/                    32 tests unitarios
+├── tests/                    33 tests unitarios
 ├── docs/
 │   ├── paper.tex             documento estilo paper (IEEE-like)
 │   ├── references.bib        13 referencias canónicas
@@ -95,6 +114,7 @@ Cobertura:
 - Tests de tiempos, regresión polinomial y bootstrap CI.
 - Tests de los generadores de instancias (determinismo bajo semilla).
 - Smoke tests de las visualizaciones.
+- Tests del layout de imports del dashboard (`test_dashboard`).
 
 ## Resultados destacados
 
