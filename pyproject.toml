@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "steiner-tree-dp-vs-greedy"
+version = "0.2.0"
+description = "Comparación empírica DP exacta (Dreyfus–Wagner) vs heurísticas greedy (KMB, Mehlhorn, RSPH) para Steiner Tree."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Fernando Mendoza" },
+    { name = "Dilary Cruz" },
+]
+dependencies = [
+    "networkx>=3.0",
+    "numpy>=1.20",
+    "matplotlib>=3.5",
+    "scipy>=1.7",
+    "pandas>=1.5",
+    "tqdm>=4.60",
+]
+
+[project.optional-dependencies]
+dashboard = ["streamlit>=1.30"]
+test = ["pytest>=7.0"]
+
+[tool.setuptools]
+packages = ["steiner", "steiner.instances", "viz", "bench"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
