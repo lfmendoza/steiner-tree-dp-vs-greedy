@@ -1,7 +1,8 @@
-"""Dashboard: Steiner Tree paso a paso y comparacion de algoritmos."""
+"""Dashboard: Steiner Tree — visualizacion y comparacion de algoritmos."""
 from __future__ import annotations
 
 import json
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -61,28 +62,33 @@ def _build(family: str, **kw):
 
 
 # ---------------------------------------------------------------------------
-# Calculo de pasos (cacheado por parametros primitivos)
+# Calculo de pasos y tiempo (cacheados por parametros primitivos)
 # ---------------------------------------------------------------------------
 
 
-@st.cache_data(show_spinner="Calculando pasos...")
+@st.cache_data(show_spinner="Calculando...")
 def _get_steps(family: str, algo: str, kw_json: str):
     kw = json.loads(kw_json)
     inst = _build(family, **kw)
     layout = compute_plotly_layout(inst.graph, inst)
 
     if algo not in STEP_FNS:
-        cost, tree = ALGOS[algo](inst)
-        return (
-            [{"step_num": 0, "tree": tree, "cost": cost,
-              "inserted_vertex": None, "candidate_savings": {},
-              "new_edges": [], "description": f"Resultado. Costo = {cost:.4f}"}],
-            layout, inst,
-        )
+        samples = []
+        for _ in range(3):
+            t0 = time.perf_counter()
+            cost, tree = ALGOS[algo](inst)
+            samples.append(time.perf_counter() - t0)
+        elapsed_ms = statistics.median(samples) * 1000
+        steps = [{"step_num": 0, "type": "done", "tree": tree, "cost": cost,
+                  "inserted_vertex": None, "candidate_savings": {}, "new_edges": [],
+                  "description": "Resultado directo (algoritmo sin pasos intermedios)."}]
+        return steps, layout, inst, elapsed_ms
 
+    t0 = time.perf_counter()
     raw = list(STEP_FNS[algo](inst))
+    elapsed_ms = (time.perf_counter() - t0) * 1000
     steps = _normalize(raw, algo)
-    return steps, layout, inst
+    return steps, layout, inst, elapsed_ms
 
 
 def _normalize(raw, algo):
@@ -97,13 +103,17 @@ def _normalize(raw, algo):
         for num, target, tree in raw:
             if num == 0:
                 desc = f"Terminal inicial: {target}"
+                stype = "initial"
             elif target is None:
                 desc = "Poda de hojas no terminales."
+                stype = "done"
             else:
                 desc = f"Terminal conectado: {target}"
+                stype = "insert"
             out.append({"step_num": num, "tree": tree, "cost": tree_cost(tree),
                         "inserted_vertex": target, "candidate_savings": {},
-                        "new_edges": _diff(prev, tree), "description": desc})
+                        "new_edges": _diff(prev, tree), "description": desc,
+                        "type": stype})
             prev = tree
     return out
 
@@ -117,13 +127,81 @@ def _diff(prev, curr):
 
 
 # ---------------------------------------------------------------------------
+# Tabla de log de pasos
+# ---------------------------------------------------------------------------
+
+
+def _build_log(steps: list, algo: str, inst) -> pd.DataFrame:
+    """Genera la tabla de log exhaustiva para todos los pasos del algoritmo."""
+    terminals = inst.terminals
+    rows = []
+
+    for s in steps:
+        num = s.get("step_num", 0)
+        stype = s.get("type", "")
+        new_edges = s.get("new_edges", [])
+        cost = s.get("cost", 0.0)
+        ins_v = s.get("inserted_vertex")
+        cands = s.get("candidate_savings") or {}
+
+        # Accion
+        if stype == "initial":
+            accion = "MST inicial sobre terminales"
+        elif stype == "insert":
+            accion = "Insertar punto de Steiner" if algo == "GSVI" else "Conectar terminal"
+        elif stype == "done" and ins_v:
+            accion = "Conectar terminal (ultimo)"
+        elif stype == "done" and not ins_v:
+            accion = "Poda / arbol final"
+        else:
+            accion = "Resultado"
+
+        # Nodo involucrado
+        nodo = str(ins_v) if ins_v else "—"
+        tipo_nodo = ("Terminal" if ins_v in terminals else "Punto de Steiner") if ins_v else "—"
+
+        # Aristas nuevas con tipo de conexion
+        edge_parts = []
+        for u, v in new_edges:
+            ut = "T" if u in terminals else "S"
+            vt = "T" if v in terminals else "S"
+            w = inst.graph[u][v]["weight"] if inst.graph.has_edge(u, v) else 0.0
+            edge_parts.append(f"{u}({ut})-{v}({vt}) w={w:.3g}")
+        aristas = " | ".join(edge_parts) if edge_parts else "—"
+
+        # Criterio de decision
+        if algo == "GSVI" and ins_v and stype == "insert":
+            sav = cands.get(ins_v, s.get("best_savings", 0))
+            criterio = f"max ahorro en MST clausura = {sav:.5f}"
+        elif algo == "RSPH" and ins_v:
+            criterio = "terminal mas cercano al arbol parcial (Dijkstra multifuente)"
+        elif stype == "initial":
+            criterio = "MST sobre clausura metrica de terminales"
+        elif stype == "done" and not ins_v:
+            criterio = "eliminar hojas no terminales iterativamente"
+        else:
+            criterio = "—"
+
+        rows.append({
+            "Paso": num,
+            "Accion": accion,
+            "Nodo": nodo,
+            "Tipo de nodo": tipo_nodo,
+            "Aristas nuevas  T=terminal S=Steiner": aristas,
+            "Costo acumulado": round(cost, 5),
+            "Criterio de decision": criterio,
+        })
+
+    return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 
 
 def _sidebar():
     st.sidebar.header("Configuracion")
-
     family = st.sidebar.selectbox(
         "Familia",
         ["Spider", "Erdos-Renyi", "Euclidean", "Geometric",
@@ -161,68 +239,61 @@ def _sidebar():
         )
     elif family == "Grid":
         kw["n"] = st.sidebar.slider("n (lado)", 3, 7, 4)
-        kw["shortcut_weight"] = st.sidebar.slider("peso atajo", 0.0, 2.0, 0.5)
+        kw["shortcut_weight"] = st.sidebar.slider("peso atajo diagonal", 0.0, 2.0, 0.5)
 
-    algo = st.sidebar.radio(
-        "Algoritmo",
-        list(ALGOS.keys()),
-        label_visibility="collapsed",
-    )
-
+    algo = st.sidebar.radio("Algoritmo", list(ALGOS.keys()),
+                            label_visibility="collapsed")
     return family, kw, algo
 
 
 # ---------------------------------------------------------------------------
-# Vista por pasos
+# Vista principal: grafo final + tabla de log
 # ---------------------------------------------------------------------------
 
 
-def _show_steps(family, algo, kw):
+def _show_analysis(family, algo, kw):
     kw_json = json.dumps(kw, sort_keys=True)
-    steps, layout, inst = _get_steps(family, algo, kw_json)
-    n = len(steps)
+    steps, layout, inst, elapsed_ms = _get_steps(family, algo, kw_json)
 
-    st.caption(f"n={inst.n}  m={inst.m}  k={inst.k}")
+    final_step = steps[-1]
+    final_tree = final_step.get("tree")
+    final_cost = final_step.get("cost", 0.0)
 
-    params_hash = hash(f"{family}{algo}{kw_json}")
-    if n > 1:
-        step_idx = st.slider("Paso", 0, n - 1, 0, key=f"s{params_hash}")
-    else:
-        step_idx = 0
+    # Metricas de cabecera
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("n (vertices)", inst.n)
+    c2.metric("k (terminales)", inst.k)
+    c3.metric("Costo del arbol", f"{final_cost:.4f}")
+    c4.metric("Tiempo de ejecucion", f"{elapsed_ms:.3f} ms")
 
-    s = steps[step_idx]
-    tree = s.get("tree")
-
+    # Grafo: arbol final
     html = make_pyvis_html(
         inst.graph, layout, inst,
-        tree=tree,
-        new_edges=s.get("new_edges", []),
-        candidate_savings=s.get("candidate_savings") or None,
-        inserted_vertex=s.get("inserted_vertex"),
-        height=510,
+        tree=final_tree,
+        height=490,
         dark=True,
     )
-    components.html(html, height=525, scrolling=False)
+    components.html(html, height=505, scrolling=False)
+    st.caption(
+        "Arbol de Steiner final. "
+        "Cuadrados dorados = terminales. "
+        "Circulos azules = puntos de Steiner incluidos. "
+        "Hover sobre nodos y aristas para ver pesos y tipo."
+    )
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Costo", f"{s.get('cost', 0):.4f}")
-    c2.metric("Paso", f"{step_idx + 1} / {n}")
-    if tree:
-        conn = len(set(tree.nodes) & inst.terminals)
-        c3.metric("Terminales", f"{conn}/{inst.k}")
+    # Tabla de log
+    st.markdown("**Log de ejecucion del algoritmo**")
+    df = _build_log(steps, algo, inst)
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
-    if s.get("description"):
-        st.write(s["description"])
-
-    cands = {v: sv for v, sv in (s.get("candidate_savings") or {}).items() if sv > 1e-10}
-    if cands:
-        top = sorted(cands.items(), key=lambda x: -x[1])[:8]
-        df = pd.DataFrame(
-            [{"Vertice": str(v), "Ahorro": round(sv, 5),
-              "Elegido": "si" if v == s.get("inserted_vertex") else ""}
-             for v, sv in top]
-        )
-        st.dataframe(df, hide_index=True, use_container_width=True)
+    n_steps = len(steps)
+    n_steiner = len(set(final_tree.nodes) - inst.terminals) if final_tree else 0
+    st.caption(
+        f"Pasos totales: {n_steps}  |  "
+        f"Puntos de Steiner usados: {n_steiner}  |  "
+        f"Aristas en el arbol: {final_tree.number_of_edges() if final_tree else 0}  |  "
+        f"Aristas en el grafo original: {inst.m}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -231,35 +302,45 @@ def _show_steps(family, algo, kw):
 
 
 def _show_comparison(family, kw):
-    kw_json = json.dumps(kw, sort_keys=True)
     inst = _build(family, **kw)
     layout = compute_plotly_layout(inst.graph, inst)
 
     skip_dp = inst.k > 13
     to_run = [a for a in ALGOS if not (a == "DP exacto" and skip_dp)]
     if skip_dp:
-        st.info(f"DP omitida (k={inst.k} > 13).")
+        st.info(f"DP omitido (k={inst.k} > 13).")
 
-    selected = st.multiselect("Algoritmos", to_run, default=to_run)
+    selected = st.multiselect("Algoritmos a comparar", to_run, default=to_run)
     if not selected:
         return
 
     if st.button("Calcular"):
         results: dict = {}
         opt = None
-        for name in selected:
-            cost, tree = ALGOS[name](inst)
+        rows = []
+        progress = st.progress(0)
+
+        for i, name in enumerate(selected):
+            samples = []
+            for _ in range(3):
+                t0 = time.perf_counter()
+                cost, tree = ALGOS[name](inst)
+                samples.append(time.perf_counter() - t0)
+            elapsed = statistics.median(samples) * 1000
             results[name] = (cost, tree, COLORS[name])
             if name == "DP exacto":
                 opt = cost
-
-        rows = []
-        for name, (cost, _, _) in results.items():
             rows.append({
                 "Algoritmo": name,
-                "Costo": round(cost, 4),
-                "Ratio vs DP": round(cost / opt, 4) if opt else "-",
+                "Costo": round(cost, 5),
+                "Tiempo mediano (ms)": round(elapsed, 3),
+                "Ratio vs DP": round(cost / opt, 5) if opt else "—",
+                "Puntos de Steiner": len(set(tree.nodes) - inst.terminals),
+                "Aristas del arbol": tree.number_of_edges(),
             })
+            progress.progress((i + 1) / len(selected))
+        progress.empty()
+
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
         fig = make_comparison_figure(inst, results, layout, opt)
@@ -283,22 +364,28 @@ def main():
     if family == "SteinLib":
         files = list_steinlib(_ROOT / "docs" / "steinlib_data")
         if not files:
-            st.error("Archivos no encontrados. Ejecuta: python -m bench.fetch_steinlib")
+            st.error("Ejecuta: python -m bench.fetch_steinlib")
             return
         chosen = st.sidebar.selectbox("Archivo .stp", [p.name for p in files])
         inst = parse_stp(_ROOT / "docs" / "steinlib_data" / chosen)
-        st.caption(f"n={inst.n}  m={inst.m}  k={inst.k}")
         skip_dp = inst.k > 13
+        rows = []
         for name in ALGOS:
             if name == "DP exacto" and skip_dp:
                 continue
-            cost, _ = ALGOS[name](inst)
-            st.write(f"{name}: {cost:.4f}")
+            samples = []
+            for _ in range(3):
+                t0 = time.perf_counter()
+                cost, tree = ALGOS[name](inst)
+                samples.append(time.perf_counter() - t0)
+            rows.append({"Algoritmo": name, "Costo": round(cost, 5),
+                         "Tiempo (ms)": round(statistics.median(samples) * 1000, 3)})
+        st.dataframe(pd.DataFrame(rows), hide_index=True)
         return
 
     tab1, tab2 = st.tabs(["Paso a paso", "Comparacion"])
     with tab1:
-        _show_steps(family, algo, kw)
+        _show_analysis(family, algo, kw)
     with tab2:
         _show_comparison(family, kw)
 
