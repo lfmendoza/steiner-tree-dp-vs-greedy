@@ -13,7 +13,7 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
+import streamlit.components.v1 as components  # noqa: F401 (reservado para uso futuro)
 
 from steiner import dreyfus_wagner, gsvi, mst_heuristic
 from steiner.gsvi import gsvi_steps
@@ -23,7 +23,12 @@ from steiner.instances.pathological import double_spider, grid_with_shortcut
 from steiner.instances.steinlib import list_steinlib, parse_stp
 from steiner.mehlhorn import mehlhorn
 from steiner.rsph import rsph, rsph_steps
-from viz.interactive import compute_plotly_layout, make_comparison_figure, make_pyvis_html
+from viz.interactive import (
+    compute_plotly_layout,
+    make_comparison_figure,
+    make_network_figure,
+    make_pyvis_html,  # noqa: F401
+)
 
 ALGOS = {
     "KMB": mst_heuristic,
@@ -316,19 +321,28 @@ def _show_analysis(family, algo, kw):
     c5.metric("Pasos algoritmicos", len([s for s in steps if s.get("type") == "insert"]))
     st.caption(f"Complejidad empirica: {pasos_str}")
 
-    # Grafo: arbol final
-    html = make_pyvis_html(
+    # Grafo: arbol final (Plotly, mismo motor que la comparacion)
+    fig = make_network_figure(
         inst.graph, layout, inst,
         tree=final_tree,
-        height=490,
-        dark=True,
+        show_all_weights=(inst.m <= 60),
+        height=520,
     )
-    components.html(html, height=505, scrolling=False)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={
+            "scrollZoom": True,
+            "displaylogo": False,
+            "modeBarButtonsToRemove": ["select2d", "lasso2d", "autoScale2d"],
+        },
+    )
     st.caption(
         "Arbol de Steiner final. "
         "Cuadrados dorados = terminales. "
         "Circulos azules = puntos de Steiner incluidos. "
-        "Hover sobre nodos y aristas para ver pesos y tipo."
+        "Rueda del raton para zoom / arrastra para mover. "
+        "Hover sobre nodos y aristas para ver detalles."
     )
 
     # Tabla de log
