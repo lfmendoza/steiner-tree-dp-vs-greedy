@@ -368,6 +368,43 @@ donde $L$ es el n\'umero de hojas del \'arbol \'optimo~\cite{KouMarkowskyBerman1
 \textbf{Cota:} $2(1-1/L)$~\cite{TakahashiMatsuyama1980}.
 RSPH es el m\'as natural para explicar visualmente el proceso incremental.
 
+\subsection{Greedy Steiner Vertex Insertion (GSVI)}
+
+Las tres heur\'isticas anteriores razonan sobre \emph{c\'omo conectar terminales}
+mediante caminos cortos o la clausura m\'etrica.  El criterio es distinto en GSVI:
+razona sobre \emph{qu\'e v\'ertices de Steiner incluir explicitamente} como puntos
+de ramificaci\'on, insertando uno a la vez el que mayor ahorro produce.
+
+\begin{pseudocode}{GSVI (Insercion Codiciosa de Puntos de Steiner)}
+  \item \textbf{Entrada:} $G$, $T$.
+  \item $\mathrm{activo} \gets T$;
+        $C_0 \gets \mathrm{MST\_costo}(\mathrm{clausura}(T))$.
+  \item \textbf{Repetir:}
+    \begin{list}{3.\arabic{innerpcb}.}{\usecounter{innerpcb}%
+      \setlength{\leftmargin}{3em}\setlength{\itemsep}{1pt}}
+      \item Para cada $v\in V\setminus\mathrm{activo}$:
+            $\mathrm{ahorro}(v)\gets C-\mathrm{MST\_costo}(\mathrm{clausura}(\mathrm{activo}\cup\{v\}))$.
+      \item $v^*\gets\arg\max_v\,\mathrm{ahorro}(v)$.
+      \item Si $\mathrm{ahorro}(v^*)>0$: $\mathrm{activo}\gets\mathrm{activo}\cup\{v^*\}$;
+            actualizar $C$.
+            En otro caso: salir del bucle.
+    \end{list}
+  \item Expandir MST de la clausura de $\mathrm{activo}$ a caminos reales;
+        MST del subgrafo; podar hojas no terminales.
+  \item \textbf{Retornar} resultado.
+\end{pseudocode}
+
+\textbf{Diferencia clave.}  KMB incluye puntos de Steiner implicitamente al
+expandir caminos del MST de la clausura; GSVI los incluye \emph{explicitamente}
+y de forma incremental.  Si existe un v\'ertice $s$ que sirve de hub para
+conectar varios terminales a costo menor que las rutas directas entre ellos,
+GSVI lo detecta a trav\'es del ahorro en el MST de la clausura extendida.
+
+\textbf{Complejidad:} $O(n^2\cdot k\cdot n^2)$ en el peor caso, manejable para
+las instancias de demo ($n\le 30$).
+\textbf{Cota:} $2(1-1/L)$ (heredada de KMB, ya que GSVI construye el MST de la
+clausura al final).
+
 % =============================================================================
 \section{Dise\~no experimental}\label{sec:exp-design}
 
