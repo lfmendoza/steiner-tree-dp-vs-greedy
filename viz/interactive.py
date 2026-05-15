@@ -332,7 +332,7 @@ def make_network_figure(
             lx.append((x0+x1)/2); ly.append((y0+y1)/2)
             lt.append(f"{d.get('weight',0):.2g}")
         traces.append(go.Scatter(x=lx, y=ly, mode="text", text=lt,
-                                 textfont=dict(size=9, color="#777"),
+                                 textfont=dict(size=9, color="#222"),
                                  hoverinfo="none", showlegend=False))
 
     # Nodos
@@ -430,7 +430,7 @@ def make_comparison_figure(
             x0, y0 = layout[u]; x1, y1 = layout[v]
             fig.add_trace(go.Scatter(x=[(x0+x1)/2], y=[(y0+y1)/2],
                                      mode="text", text=[f"{d.get('weight',0):.2g}"],
-                                     textfont=dict(size=8, color="#888"),
+                                     textfont=dict(size=8, color="#222"),
                                      hoverinfo="none", showlegend=False), row=row, col=col)
         for v in instance.graph.nodes():
             x, y = layout[v]
@@ -442,7 +442,7 @@ def make_comparison_figure(
                                                  symbol="square" if is_t else "circle",
                                                  line=dict(color="black", width=1)),
                                      text=[str(v)], textposition="top center",
-                                     textfont=dict(size=8),
+                                     textfont=dict(size=9, color="#111"),
                                      hovertemplate=f"<b>{v}</b><br>{'Terminal' if is_t else 'Steiner'}<extra></extra>",
                                      showlegend=False), row=row, col=col)
 
@@ -452,5 +452,5 @@ def make_comparison_figure(
         fig.update_yaxes(showgrid=False, zeroline=False, showticklabels=False,
                          row=(i-1)//cols+1, col=(i-1)%cols+1)
     fig.update_layout(height=420*rows, paper_bgcolor="white",
-                      plot_bgcolor="#F5F7FA", margin=dict(l=10, r=10, t=60, b=20))
+                      plot_bgcolor="#EAECF0", margin=dict(l=10, r=10, t=60, b=20))
     return fig
