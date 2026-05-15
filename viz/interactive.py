@@ -431,7 +431,7 @@ def make_comparison_figure(
             x0, y0 = layout[u]; x1, y1 = layout[v]
             fig.add_trace(go.Scatter(x=[(x0+x1)/2], y=[(y0+y1)/2],
                                      mode="text", text=[f"{d.get('weight',0):.2g}"],
-                                     textfont=dict(size=8, color="#222"),
+                                     textfont=dict(size=9, color="#CCCCCC"),
                                      hoverinfo="none", showlegend=False), row=row, col=col)
         for v in instance.graph.nodes():
             x, y = layout[v]
@@ -439,11 +439,11 @@ def make_comparison_figure(
             in_t = tree and v in tree.nodes()
             fig.add_trace(go.Scatter(x=[x], y=[y], mode="markers+text",
                                      marker=dict(size=16 if is_t else 10,
-                                                 color=C["terminal"] if is_t else (color if in_t else C["inactive"]),
+                                                 color=C["terminal"] if is_t else (color if in_t else "#556070"),
                                                  symbol="square" if is_t else "circle",
-                                                 line=dict(color="black", width=1)),
+                                                 line=dict(color="#CCCCCC", width=1)),
                                      text=[str(v)], textposition="top center",
-                                     textfont=dict(size=9, color="#111"),
+                                     textfont=dict(size=10, color="#FFFFFF"),
                                      hovertemplate=f"<b>{v}</b><br>{'Terminal' if is_t else 'Steiner'}<extra></extra>",
                                      showlegend=False), row=row, col=col)
 
@@ -452,6 +452,13 @@ def make_comparison_figure(
                          row=(i-1)//cols+1, col=(i-1)%cols+1)
         fig.update_yaxes(showgrid=False, zeroline=False, showticklabels=False,
                          row=(i-1)//cols+1, col=(i-1)%cols+1)
-    fig.update_layout(height=420*rows, paper_bgcolor="white",
-                      plot_bgcolor="#EAECF0", margin=dict(l=10, r=10, t=60, b=20))
+    fig.update_layout(
+        height=420 * rows,
+        paper_bgcolor="#1E1E2E",
+        plot_bgcolor="#2A2A3E",
+        margin=dict(l=10, r=10, t=70, b=20),
+        font=dict(color="#ECECEC"),
+    )
+    # Subplot titles son anotaciones — forzar color blanco y tamaño legible
+    fig.update_annotations(font=dict(color="#FFFFFF", size=13))
     return fig
