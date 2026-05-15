@@ -127,6 +127,53 @@ def _diff(prev, curr):
 
 
 # ---------------------------------------------------------------------------
+# Conteo de pasos algoritmicos (independiente del hardware)
+# ---------------------------------------------------------------------------
+
+
+def _algo_steps_count(algo: str, steps: list, inst) -> str:
+    """Devuelve un conteo legible de las operaciones fundamentales del algoritmo.
+
+    Esta metrica es independiente del hardware y se relaciona directamente
+    con la complejidad teorica.
+    """
+    k = inst.k
+    n = inst.n
+    m = inst.m
+
+    if algo == "DP exacto":
+        # Cada subconjunto D de T de tamanho s y cada vertice v:
+        # sum_{s=2}^{k} C(k,s) * n operaciones de particion y extension.
+        # Dominado por 3^k * n.
+        ops = (3 ** k) * n
+        return f"~3^k * n = 3^{k} * {n} = {ops:,} operaciones"
+
+    if algo == "KMB":
+        # k Dijkstras para la clausura metrica + MST de k nodos + expansion.
+        return f"{k} Dijkstras (clausura metrica sobre k={k} terminales)"
+
+    if algo == "Mehlhorn":
+        # 1 Dijkstra multifuente + MST sobre grafo auxiliar.
+        return f"1 Dijkstra multifuente sobre n={n} nodos + 1 MST"
+
+    if algo == "RSPH":
+        # k Dijkstras multifuente, una por terminal conectado.
+        iters = sum(1 for s in steps if s.get("type") == "insert")
+        return f"{iters} Dijkstras multifuente (una por terminal, k={k})"
+
+    if algo == "GSVI":
+        # Por cada iteracion: n candidatos * MST sobre clausura.
+        # n_iters = numero de puntos de Steiner insertados.
+        iters = sum(1 for s in steps if s.get("type") == "insert")
+        return (
+            f"{iters} inserciones; cada una evalua ~{n - k} candidatos "
+            f"con MST O(k^2) → ~{iters * (n - k)} evaluaciones de MST"
+        )
+
+    return "—"
+
+
+# ---------------------------------------------------------------------------
 # Tabla de log de pasos
 # ---------------------------------------------------------------------------
 
@@ -260,11 +307,14 @@ def _show_analysis(family, algo, kw):
     final_cost = final_step.get("cost", 0.0)
 
     # Metricas de cabecera
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("n (vertices)", inst.n)
     c2.metric("k (terminales)", inst.k)
     c3.metric("Costo del arbol", f"{final_cost:.4f}")
     c4.metric("Tiempo de ejecucion", f"{elapsed_ms:.3f} ms")
+    pasos_str = _algo_steps_count(algo, steps, inst)
+    c5.metric("Pasos algoritmicos", len([s for s in steps if s.get("type") == "insert"]))
+    st.caption(f"Complejidad empirica: {pasos_str}")
 
     # Grafo: arbol final
     html = make_pyvis_html(
@@ -322,21 +372,35 @@ def _show_comparison(family, kw):
 
         for i, name in enumerate(selected):
             samples = []
+            tree_out = None
             for _ in range(3):
                 t0 = time.perf_counter()
-                cost, tree = ALGOS[name](inst)
+                cost, tree_out = ALGOS[name](inst)
                 samples.append(time.perf_counter() - t0)
             elapsed = statistics.median(samples) * 1000
-            results[name] = (cost, tree, COLORS[name])
+            results[name] = (cost, tree_out, COLORS[name])
             if name == "DP exacto":
                 opt = cost
+
+            # Pasos algoritmicos para este algoritmo
+            if name in STEP_FNS:
+                algo_steps = list(STEP_FNS[name](inst))
+                algo_steps_norm = _normalize(algo_steps, name)
+                n_iters = sum(1 for s in algo_steps_norm if s.get("type") == "insert")
+                pasos_desc = _algo_steps_count(name, algo_steps_norm, inst)
+            else:
+                n_iters = 1
+                pasos_desc = _algo_steps_count(name, [], inst)
+
             rows.append({
                 "Algoritmo": name,
                 "Costo": round(cost, 5),
                 "Tiempo mediano (ms)": round(elapsed, 3),
                 "Ratio vs DP": round(cost / opt, 5) if opt else "—",
-                "Puntos de Steiner": len(set(tree.nodes) - inst.terminals),
-                "Aristas del arbol": tree.number_of_edges(),
+                "Puntos de Steiner": len(set(tree_out.nodes) - inst.terminals),
+                "Aristas del arbol": tree_out.number_of_edges(),
+                "Iteraciones": n_iters,
+                "Complejidad empirica": pasos_desc,
             })
             progress.progress((i + 1) / len(selected))
         progress.empty()
