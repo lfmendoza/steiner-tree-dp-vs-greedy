@@ -21,29 +21,22 @@ from .graph_utils import (
     prune_non_terminal_leaves,
     tree_cost,
 )
+from .gsvi import gsvi
+from .mehlhorn import mehlhorn
 from .mst_heuristic import mst_heuristic
+from .rsph import rsph
 
 __all__ = [
     "Instance",
     "all_pairs_shortest_paths",
     "count_leaves",
     "dreyfus_wagner",
+    "gsvi",
     "induced_metric_closure",
     "is_valid_steiner_tree",
+    "mehlhorn",
     "mst_heuristic",
     "prune_non_terminal_leaves",
+    "rsph",
     "tree_cost",
 ]
-
-
-def __getattr__(name: str):
-    """Lazy import for optional algorithms (avoid import errors before Phase 1)."""
-    if name == "mehlhorn":
-        from .mehlhorn import mehlhorn as _f
-
-        return _f
-    if name == "rsph":
-        from .rsph import rsph as _f
-
-        return _f
-    raise AttributeError(f"module 'steiner' has no attribute {name!r}")
