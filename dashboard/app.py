@@ -365,9 +365,8 @@ def _show_comparison(family, kw):
         return
 
     if st.button("Calcular"):
+        all_results: dict = {}
         results: dict = {}
-        opt = None
-        rows = []
         progress = st.progress(0)
 
         for i, name in enumerate(selected):
@@ -378,32 +377,39 @@ def _show_comparison(family, kw):
                 cost, tree_out = ALGOS[name](inst)
                 samples.append(time.perf_counter() - t0)
             elapsed = statistics.median(samples) * 1000
-            results[name] = (cost, tree_out, COLORS[name])
-            if name == "DP exacto":
-                opt = cost
 
-            # Pasos algoritmicos para este algoritmo
             if name in STEP_FNS:
-                algo_steps = list(STEP_FNS[name](inst))
-                algo_steps_norm = _normalize(algo_steps, name)
+                algo_steps_norm = _normalize(list(STEP_FNS[name](inst)), name)
                 n_iters = sum(1 for s in algo_steps_norm if s.get("type") == "insert")
                 pasos_desc = _algo_steps_count(name, algo_steps_norm, inst)
             else:
                 n_iters = 1
                 pasos_desc = _algo_steps_count(name, [], inst)
 
+            all_results[name] = {
+                "cost": cost, "tree": tree_out,
+                "elapsed": elapsed, "n_iters": n_iters, "pasos_desc": pasos_desc,
+            }
+            results[name] = (cost, tree_out, COLORS[name])
+            progress.progress((i + 1) / len(selected))
+
+        progress.empty()
+        opt = all_results.get("DP exacto", {}).get("cost")
+
+        rows = []
+        for name in selected:
+            r = all_results[name]
+            cost = r["cost"]
             rows.append({
                 "Algoritmo": name,
                 "Costo": round(cost, 5),
-                "Tiempo mediano (ms)": round(elapsed, 3),
+                "Tiempo mediano (ms)": round(r["elapsed"], 3),
                 "Ratio vs DP": round(cost / opt, 5) if opt else "—",
-                "Puntos de Steiner": len(set(tree_out.nodes) - inst.terminals),
-                "Aristas del arbol": tree_out.number_of_edges(),
-                "Iteraciones": n_iters,
-                "Complejidad empirica": pasos_desc,
+                "Puntos de Steiner": len(set(r["tree"].nodes) - inst.terminals),
+                "Aristas del arbol": r["tree"].number_of_edges(),
+                "Iteraciones": r["n_iters"],
+                "Complejidad empirica": r["pasos_desc"],
             })
-            progress.progress((i + 1) / len(selected))
-        progress.empty()
 
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
