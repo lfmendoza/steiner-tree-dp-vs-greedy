@@ -185,11 +185,10 @@ def _show_steps(family, algo, kw):
     st.caption(f"n={inst.n}  m={inst.m}  k={inst.k}")
 
     params_hash = hash(f"{family}{algo}{kw_json}")
-    step_idx = st.slider(
-        "Paso", 0, n - 1, 0,
-        key=f"s{params_hash}",
-        disabled=(n == 1),
-    )
+    if n > 1:
+        step_idx = st.slider("Paso", 0, n - 1, 0, key=f"s{params_hash}")
+    else:
+        step_idx = 0
 
     s = steps[step_idx]
     tree = s.get("tree")
