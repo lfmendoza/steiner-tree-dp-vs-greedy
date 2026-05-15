@@ -192,17 +192,17 @@ def make_pyvis_html(
         nbrs = [str(n) for n in G.neighbors(v)]
         if len(nbrs) > 6:
             nbrs = nbrs[:6] + [f"+{len(nbrs)-6}"]
-        tip = (
-            f"<b>{v}</b><br>"
-            f"{'🟨 Terminal' if is_t else ('🔵 Steiner (árbol)' if in_tree else ('⭐ Insertado' if is_ins else '⚪ No activo'))}<br>"
-        )
+
+        tipo = "Terminal" if is_t else ("Steiner (arbol)" if in_tree else ("Insertado este paso" if is_ins else "No activo"))
+        parts = [str(v), tipo]
         if is_ins:
-            tip += f"<b>Insertado en este paso</b><br>"
+            parts.append("Insertado en este paso")
         if is_cand:
-            tip += f"Ahorro potencial: <b>{sav:.4f}</b><br>"
+            parts.append(f"Ahorro potencial: {sav:.4f}")
         if in_tree and tree:
-            tip += f"Grado en árbol: {tree.degree(v)}<br>"
-        tip += f"Vecinos: {', '.join(nbrs)}"
+            parts.append(f"Grado en arbol: {tree.degree(v)}")
+        parts.append(f"Vecinos: {', '.join(nbrs)}")
+        tip = "\n".join(parts)
 
         net.add_node(str(v), label=str(v), x=vx, y=vy,
                      color=color, shape=shape, size=size,
@@ -214,11 +214,12 @@ def make_pyvis_html(
         is_new = key in new_edge_set
         in_tree_edge = key in tree_edges_set
         w = data.get("weight", 0.0)
-        tip_e = f"({u}) — ({v})<br>Peso: <b>{w:.4f}</b>"
+        parts_e = [f"({u}) - ({v})", f"Peso: {w:.4f}"]
         if is_new:
-            tip_e += "<br><b>✅ Arista añadida este paso</b>"
+            parts_e.append("Arista añadida en este paso")
         elif in_tree_edge:
-            tip_e += "<br>En el árbol actual"
+            parts_e.append("En el arbol actual")
+        tip_e = "\n".join(parts_e)
 
         if is_new:
             e_color = C["new_edge"]
